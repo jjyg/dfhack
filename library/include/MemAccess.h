@@ -287,6 +287,15 @@ namespace DFHack
                 EXEC = 4
             };
 
+#ifdef WIN32
+            __declspec(naked)
+            unsigned long generic_call(void *fptr, unsigned long stack_fixup, unsigned long regs_used,
+                    unsigned long r_eax, unsigned long r_ebx, unsigned long r_ecx, unsigned long r_edx,
+                    unsigned long r_esi, unsigned long r_edi, unsigned long r_ebp,
+                    unsigned long stack0, unsigned long stack1, unsigned long stack2, unsigned long stack3,
+                    unsigned long stack4, unsigned long stack5, unsigned long stack6, unsigned long stack7);
+#endif
+
     private:
         VersionInfo * my_descriptor;
         PlatformSpecific *d;

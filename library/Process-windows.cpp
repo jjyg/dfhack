@@ -414,3 +414,195 @@ int Process::memProtect(void *ptr, const int length, const int prot)
 
     return !VirtualProtect(ptr, length, prot_native, &old_prot);
 }
+
+__declspec(naked)
+unsigned long Process::generic_call(void *fptr, unsigned long stack_fixup, unsigned long regs_used,
+        unsigned long r_eax, unsigned long r_ebx, unsigned long r_ecx, unsigned long r_edx,
+        unsigned long r_esi, unsigned long r_edi, unsigned long r_ebp,
+        unsigned long stack0, unsigned long stack1, unsigned long stack2, unsigned long stack3,
+        unsigned long stack4, unsigned long stack5, unsigned long stack6, unsigned long stack7)
+{
+    // TODO add sanity checks ? eg stack_fixup should be in [0,4,8..32]
+    __asm {
+        // saved registers
+        // C ABI require us to preserve ebx, esi, edi, ebp for our caller
+        push ebp
+        push edi
+        push esi
+        push ebx
+
+        // regs_used is a bitfield in the low 16bits to mark registers we want to set from our argument list
+        // the high 16bits hold the register number for the register used by the target function to store the return value
+        // eg 0 = eax, 1 = ebx, ...
+        // store this register number here, so we can access it in the return stub
+        push regs_used
+        shr dword ptr [esp], 16
+
+        // function stack parameters
+        push stack7
+        push stack6
+        push stack5
+        push stack4
+        push stack3
+        push stack2
+        push stack1
+        push stack0
+
+        // cook a magic function return address
+        // this points to a stub according to stack_fixup
+        // the called function will return to it, its job is to:
+        //  - honor stack_fixup
+        //  - pop the previous stackX arguments
+        //  - save the callee return value
+        //  - restore the saved registers to honor the C ABI for our caller
+        cmp stack_fixup, 0
+        jnz stack_fixup_more_0
+        push ret_fixup_0
+        jmp stack_fixup_ready
+    stack_fixup_more_0:
+        cmp stack_fixup, 4
+        jnz stack_fixup_more_4
+        push ret_fixup_4
+        jmp stack_fixup_ready
+    stack_fixup_more_4:
+        cmp stack_fixup, 8
+        jnz stack_fixup_more_8
+        push ret_fixup_8
+        jmp stack_fixup_ready
+    stack_fixup_more_8:
+        cmp stack_fixup, 12
+        jnz stack_fixup_more_12
+        push ret_fixup_12
+        jmp stack_fixup_ready
+    stack_fixup_more_12:
+        cmp stack_fixup, 16
+        jnz stack_fixup_more_16
+        push ret_fixup_16
+        jmp stack_fixup_ready
+    stack_fixup_more_16:
+        cmp stack_fixup, 20
+        jnz stack_fixup_more_20
+        push ret_fixup_20
+        jmp stack_fixup_ready
+    stack_fixup_more_20:
+        cmp stack_fixup, 24
+        jnz stack_fixup_more_24
+        push ret_fixup_24
+        jmp stack_fixup_ready
+    stack_fixup_more_24:
+        cmp stack_fixup, 28
+        jnz stack_fixup_more_28
+        push ret_fixup_28
+        jmp stack_fixup_ready
+    stack_fixup_more_28:
+        push ret_fixup_32
+    stack_fixup_ready:
+
+        // push the address of the function we want to call (we can't do a call register as we may have no free register, eg regs_used = 0x7f)
+        push fptr
+
+        // function register parameters
+        // set a register only if its bit is set in regs_used
+        // load ebp last, as it may be used by the assembler to access the func params (regs_used etc)
+        test regs_used, 1
+        jnz skip_eax
+        mov eax, r_eax
+    skip_eax:
+        test regs_used, 2
+        jnz skip_ebx
+        mov ebx, r_ebx
+    skip_ebx:
+        test regs_used, 4
+        jnz skip_ecx
+        mov ecx, r_ecx
+    skip_ecx:
+        test regs_used, 8
+        jnz skip_edx
+        mov edx, r_edx
+    skip_edx:
+        test regs_used, 16
+        jnz skip_esi
+        mov esi, r_esi
+    skip_esi:
+        test regs_used, 32
+        jnz skip_edi
+        mov edi, r_edi
+    skip_edi:
+        test regs_used, 64
+        jnz skip_ebp
+        mov ebp, r_ebp
+    skip_ebp:
+
+        // this is the actual target function call
+        // after this instruction, eip = fptr, and esp points to the return stub we set up previously
+        ret
+
+
+        // cooked return stubs for the target function
+        // in here we cant access any of our C arguments (until we fixup the stack) nor any register
+    ret_fixup_0:
+        add esp, 4
+    ret_fixup_4:
+        add esp, 4
+    ret_fixup_8:
+        add esp, 4
+    ret_fixup_12:
+        add esp, 4
+
+    ret_fixup_16:
+        add esp, 4
+    ret_fixup_20:
+        add esp, 4
+    ret_fixup_24:
+        add esp, 4
+    ret_fixup_28:
+        add esp, 4
+    ret_fixup_32:
+
+        // stack now points to the integer identifying the return value register
+        cmp dword ptr [esp], 0
+        jz ret_done
+
+        cmp dword ptr [esp], 1
+        jnz ret_not_ebx
+        mov eax, ebx
+        jmp ret_done
+    ret_not_ebx:
+        cmp dword ptr [esp], 2
+        jnz ret_not_ecx
+        mov eax, ecx
+        jmp ret_done
+    ret_not_ecx:
+        cmp dword ptr [esp], 3
+        jnz ret_not_edx
+        mov eax, edx
+        jmp ret_done
+    ret_not_edx:
+        cmp dword ptr [esp], 4
+        jnz ret_not_esi
+        mov eax, esi
+        jmp ret_done
+    ret_not_esi:
+        cmp dword ptr [esp], 5
+        jnz ret_not_edi
+        mov eax, edi
+        jmp ret_done
+    ret_not_edi:
+        cmp dword ptr [esp], 6
+        jnz ret_not_ebp
+        mov eax, ebp
+    ret_not_ebp:
+    ret_done:
+        add esp, 4  // pop the regs_used value
+
+        // now we saved the return value in eax
+        // restore the caller saved register
+        push ebx
+        push esi
+        push edi
+        push ebp
+
+        // mission accomplished
+        ret
+    }
+}
