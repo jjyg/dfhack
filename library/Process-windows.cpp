@@ -597,10 +597,10 @@ unsigned long Process::generic_call(void *fptr, unsigned long stack_fixup, unsig
 
         // now we saved the return value in eax
         // restore the caller saved register
-        push ebx
-        push esi
-        push edi
-        push ebp
+        pop ebx
+        pop esi
+        pop edi
+        pop ebp
 
         // mission accomplished
         ret
