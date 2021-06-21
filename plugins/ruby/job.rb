@@ -22,7 +22,7 @@ module DFHack
 
             itemlink = SpecificRef.cpp_new
             itemlink.type = :JOB
-            itemlink.job = job
+            itemlink.data.job = job
             item.specific_refs << itemlink
 
             joblink = JobItemRef.cpp_new

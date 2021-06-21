@@ -47,6 +47,7 @@ module DFHack
             subtype = TrapType.int(subtype) if subtype.kind_of?(::Symbol) and type == :Trap
             bld.setSubtype(subtype)
             bld.setCustomType(custom)
+            bld.profile.max_general_orders = 5 if bld.respond_to?(:profile)
             case type
             when :Well; bld.bucket_z = bld.z
             when :Furnace; bld.melt_remainder[world.raws.inorganics.length] = 0
@@ -229,13 +230,13 @@ module DFHack
                 next if ob.z != bld.z
                 if bld.is_room and bld.room.extents
                     next if ob.is_room or ob.x1 < bld.room.x or ob.x1 >= bld.room.x+bld.room.width or ob.y1 < bld.room.y or ob.y1 >= bld.room.y+bld.room.height
-                    next if bld.room.extents[bld.room.width*(ob.y1-bld.room.y)+(ob.x1-bld.room.x)] == 0
+                    next if bld.room.extents[bld.room.width*(ob.y1-bld.room.y)+(ob.x1-bld.room.x)] == :None
                     ui.equipment.update.buildings = true
                     bld.children << ob
                     ob.parents << bld
                 elsif ob.is_room and ob.room.extents
                     next if bld.is_room or bld.x1 < ob.room.x or bld.x1 >= ob.room.x+ob.room.width or bld.y1 < ob.room.y or bld.y1 >= ob.room.y+ob.room.height
-                    next if ob.room.extents[ob.room.width*(bld.y1-ob.room.y)+(bld.x1-ob.room.x)].to_i == 0
+                    next if ob.room.extents[ob.room.width*(bld.y1-ob.room.y)+(bld.x1-ob.room.x)] == :None
                     ui.equipment.update.buildings = true
                     ob.children << bld
                     bld.parents << ob
@@ -322,7 +323,7 @@ module DFHack
                 if idx = bld.owner.owned_buildings.index { |ob| ob.id == bld.id }
                     bld.owner.owned_buildings.delete_at(idx)
                 end
-                if spouse = bld.owner.relations.spouse_tg and
+                if spouse = unit_find(bld.owner.relationship_ids[:Spouse]) and
                         idx = spouse.owned_buildings.index { |ob| ob.id == bld.id }
                     spouse.owned_buildings.delete_at(idx)
                 end
@@ -330,7 +331,7 @@ module DFHack
             bld.owner = unit
             if unit
                 unit.owned_buildings << bld
-                if spouse = bld.owner.relations.spouse_tg and
+                if spouse = unit_find(bld.owner.relationship_ids[:Spouse]) and
                         !spouse.owned_buildings.index { |ob| ob.id == bld.id } and
                         bld.canUseSpouseRoom
                     spouse.owned_buildings << bld
